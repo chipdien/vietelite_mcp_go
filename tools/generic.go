@@ -15,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"vietelite-mcp/go-server/db"
+	"vietelite-mcp/go-server/logger"
 )
 
 // serviceNames is the canonical set of database services exposed by the server,
@@ -166,10 +167,12 @@ func errorResult(err error) *mcp.CallToolResult {
 }
 
 func handleListDatabases(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	start := time.Now()
 	databases := make([]dbInfo, 0, len(serviceNames))
 	for _, service := range serviceNames {
 		databases = append(databases, inspectDatabase(ctx, service))
 	}
+	logger.LogToolCall("list_databases", "", time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(listDatabasesResult{Databases: databases}), nil
 }
 
@@ -213,16 +216,20 @@ func countTables(ctx context.Context, pool *sql.DB, schemaName string) int {
 }
 
 func handleListTables(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	start := time.Now()
 	service, err := r.RequireString("database")
 	if err != nil {
+		logger.LogToolCall("list_tables", "", time.Since(start), err)
 		return errorResult(err), nil
 	}
 	if err := validateDatabase(service); err != nil {
+		logger.LogToolCall("list_tables", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
 	pool, err := db.GetPool(service)
 	if err != nil {
+		logger.LogToolCall("list_tables", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
@@ -235,7 +242,9 @@ func handleListTables(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallTool
 		 WHERE TABLE_SCHEMA = ?
 		 ORDER BY TABLE_NAME`, result.Database)
 	if err != nil {
-		return errorResult(fmt.Errorf("failed to list tables: %w", err)), nil
+		queryErr := fmt.Errorf("failed to list tables: %w", err)
+		logger.LogToolCall("list_tables", fmt.Sprintf("service=%s", service), time.Since(start), queryErr)
+		return errorResult(queryErr), nil
 	}
 	defer rows.Close()
 
@@ -244,7 +253,9 @@ func handleListTables(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallTool
 		var t tableInfo
 		var rowCount sql.NullInt64
 		if err := rows.Scan(&t.Name, &rowCount, &t.Comment); err != nil {
-			return errorResult(fmt.Errorf("failed to read table row: %w", err)), nil
+			scanErr := fmt.Errorf("failed to read table row: %w", err)
+			logger.LogToolCall("list_tables", fmt.Sprintf("service=%s", service), time.Since(start), scanErr)
+			return errorResult(scanErr), nil
 		}
 		if rowCount.Valid {
 			t.Rows = rowCount.Int64
@@ -252,33 +263,43 @@ func handleListTables(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallTool
 		tables = append(tables, t)
 	}
 	if err := rows.Err(); err != nil {
-		return errorResult(fmt.Errorf("failed to iterate tables: %w", err)), nil
+		iterErr := fmt.Errorf("failed to iterate tables: %w", err)
+		logger.LogToolCall("list_tables", fmt.Sprintf("service=%s", service), time.Since(start), iterErr)
+		return errorResult(iterErr), nil
 	}
 
 	result.TableCount = len(tables)
 	result.Tables = tables
+	logger.LogToolCall("list_tables", fmt.Sprintf("service=%s tableCount=%d", service, result.TableCount), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
 func handleDescribeTable(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	start := time.Now()
 	service, err := r.RequireString("database")
 	if err != nil {
+		logger.LogToolCall("describe_table", "", time.Since(start), err)
 		return errorResult(err), nil
 	}
 	if err := validateDatabase(service); err != nil {
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
 	table, err := r.RequireString("table")
 	if err != nil {
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 	if strings.TrimSpace(table) == "" {
-		return errorResult(errors.New("argument \"table\" must not be empty")), nil
+		emptyErr := errors.New("argument \"table\" must not be empty")
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s table=%s", service, table), time.Since(start), emptyErr)
+		return errorResult(emptyErr), nil
 	}
 
 	pool, err := db.GetPool(service)
 	if err != nil {
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s table=%s", service, table), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
@@ -287,15 +308,18 @@ func handleDescribeTable(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallT
 
 	columns, err := queryColumns(ctx, pool, result.Database, table)
 	if err != nil {
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s table=%s", service, table), time.Since(start), err)
 		return errorResult(err), nil
 	}
 	foreignKeys, err := queryForeignKeys(ctx, pool, result.Database, table)
 	if err != nil {
+		logger.LogToolCall("describe_table", fmt.Sprintf("service=%s table=%s", service, table), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
 	result.Columns = columns
 	result.ForeignKeys = foreignKeys
+	logger.LogToolCall("describe_table", fmt.Sprintf("service=%s table=%s", service, table), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
@@ -359,28 +383,34 @@ func queryForeignKeys(ctx context.Context, pool *sql.DB, schemaName, table strin
 }
 
 func handleExecuteReadQuery(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	start := time.Now()
 	service, err := r.RequireString("database")
 	if err != nil {
+		logger.LogToolCall("execute_read_query", "", time.Since(start), err)
 		return errorResult(err), nil
 	}
 	if err := validateDatabase(service); err != nil {
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
 	query, err := r.RequireString("query")
 	if err != nil {
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s", service), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
 	limit := clampLimit(r.GetInt("limit", defaultLimit))
 
 	if err := db.ValidateSQL(query); err != nil {
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d", service, query, limit), time.Since(start), err)
 		return errorResult(err), nil
 	}
 	finalSQL := db.EnforceLimit(query, limit)
 
 	pool, err := db.GetPool(service)
 	if err != nil {
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d", service, finalSQL, limit), time.Since(start), err)
 		return errorResult(err), nil
 	}
 
@@ -389,13 +419,17 @@ func handleExecuteReadQuery(ctx context.Context, r mcp.CallToolRequest) (*mcp.Ca
 
 	rows, err := pool.QueryContext(ctx, finalSQL)
 	if err != nil {
-		return errorResult(fmt.Errorf("query failed: %w", err)), nil
+		queryErr := fmt.Errorf("query failed: %w", err)
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d", service, finalSQL, limit), time.Since(start), queryErr)
+		return errorResult(queryErr), nil
 	}
 	defer rows.Close()
 
 	rowMaps, err := rowsToMaps(rows)
 	if err != nil {
-		return errorResult(fmt.Errorf("failed to read query results: %w", err)), nil
+		readErr := fmt.Errorf("failed to read query results: %w", err)
+		logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d", service, finalSQL, limit), time.Since(start), readErr)
+		return errorResult(readErr), nil
 	}
 
 	result := executeReadQueryResult{
@@ -405,6 +439,8 @@ func handleExecuteReadQuery(ctx context.Context, r mcp.CallToolRequest) (*mcp.Ca
 		RowCount: len(rowMaps),
 		Rows:     rowMaps,
 	}
+
+	logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d rows=%d", service, finalSQL, limit, len(rowMaps)), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
