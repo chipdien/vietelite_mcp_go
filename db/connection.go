@@ -24,9 +24,10 @@ var (
 )
 
 // InitPools creates and stores MySQL connection pools for the four database services.
+// It is atomic and rollback-safe: if any connection fails to open, all partially opened
+// pools are closed and the global state remains unchanged.
 func InitPools(cfg config.DBConfig) error {
-	poolsMu.Lock()
-	defer poolsMu.Unlock()
+	tempPools := make(map[string]*sql.DB)
 
 	services := map[string]string{
 		"identity": cfg.IdentityDB,
@@ -41,6 +42,9 @@ func InitPools(cfg config.DBConfig) error {
 
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
+			for _, opened := range tempPools {
+				_ = opened.Close()
+			}
 			return fmt.Errorf("failed to open pool for service %s: %w", service, err)
 		}
 
@@ -48,8 +52,17 @@ func InitPools(cfg config.DBConfig) error {
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(5 * time.Minute)
 
-		pools[service] = db
+		tempPools[service] = db
 	}
+
+	poolsMu.Lock()
+	for _, oldPool := range pools {
+		if oldPool != nil {
+			_ = oldPool.Close()
+		}
+	}
+	pools = tempPools
+	poolsMu.Unlock()
 
 	return nil
 }
