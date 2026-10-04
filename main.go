@@ -32,6 +32,7 @@ func main() {
 	)
 
 	tools.RegisterGenericTools(s)
+	tools.RegisterBusinessTools(s)
 
 	logger.Info("SERVER_READY", "MCP Server listening on stdio transport...")
 	if err := server.ServeStdio(s); err != nil {
