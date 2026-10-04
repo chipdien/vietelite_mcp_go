@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"log"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -18,7 +20,9 @@ type DBConfig struct {
 }
 
 func LoadConfig() DBConfig {
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("Notice: could not load .env file: %v", err)
+	}
 	return DBConfig{
 		Host:       getEnv("MYSQL_HOST", "127.0.0.1"),
 		Port:       getEnv("MYSQL_PORT", "3306"),
