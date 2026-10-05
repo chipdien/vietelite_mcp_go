@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 
 	"vietelite-mcp/go-server/config"
@@ -12,6 +14,10 @@ import (
 )
 
 func main() {
+	transport := flag.String("transport", "stdio", "Transport mode: stdio or sse")
+	port := flag.Int("port", 8080, "HTTP port for SSE transport")
+	flag.Parse()
+
 	if err := logger.InitLogger("logs/mcp.log"); err != nil {
 		log.Printf("Warning: failed to initialize log file: %v", err)
 	}
@@ -34,9 +40,20 @@ func main() {
 	tools.RegisterGenericTools(s)
 	tools.RegisterBusinessTools(s)
 
-	logger.Info("SERVER_READY", "MCP Server listening on stdio transport...")
-	if err := server.ServeStdio(s); err != nil {
-		logger.Error("SERVER_ERROR", "Server runtime error: %v", err)
-		log.Fatalf("Server error: %v", err)
+	if *transport == "sse" {
+		sseServer := server.NewSSEServer(s)
+		addr := fmt.Sprintf(":%d", *port)
+		logger.Info("SERVER_READY", "MCP SSE Server listening on http://0.0.0.0:%d/sse...", *port)
+		log.Printf("MCP SSE Server listening on http://0.0.0.0:%d/sse", *port)
+		if err := sseServer.Start(addr); err != nil {
+			logger.Error("SERVER_ERROR", "SSE Server error: %v", err)
+			log.Fatalf("SSE Server error: %v", err)
+		}
+	} else {
+		logger.Info("SERVER_READY", "MCP Server listening on stdio transport...")
+		if err := server.ServeStdio(s); err != nil {
+			logger.Error("SERVER_ERROR", "Server runtime error: %v", err)
+			log.Fatalf("Server error: %v", err)
+		}
 	}
 }
