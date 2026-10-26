@@ -130,68 +130,183 @@ The server supports two transport modes:
 
 ### Option A: VPS Deployment via Systemd (SSE Mode)
 
-To run the MCP server as a background service on **VPS B**:
+Deploy the MCP server as a background service on Ubuntu/Debian VPS.
 
-1. **Build binary and place files on VPS B:**
+#### 1. Build the binary
 
-   ```sh
-   mkdir -p /opt/vietelite-mcp
-   cp main .env /opt/vietelite-mcp/
-   ```
+**Option 1A: Build on VPS** (requires Go 1.26+)
+```sh
+sudo apt update && sudo apt install -y git
+# Install Go from https://go.dev/dl/ (apt often has older versions)
+git clone https://github.com/chipdien/vietelite_mcp.git
+cd vietelite_mcp/go-server
+go build -o main .
+```
 
-2. **Create Systemd Service (`/etc/systemd/system/vietelite-mcp.service`):**
+**Option 1B: Cross-compile on your Mac and upload**
+```sh
+cd go-server
+GOOS=linux GOARCH=amd64 go build -o main .   # Use GOARCH=arm64 for ARM VPS
+scp main user@<VPS_IP>:/tmp/
+```
 
-   ```ini
-   [Unit]
-   Description=VietElite Go MCP Server (SSE)
-   After=network.target mysql.service
+#### 2. Place files in `/opt/vietelite-mcp`
 
-   [Service]
-   Type=simple
-   User=www-data
-   WorkingDirectory=/opt/vietelite-mcp
-   ExecStart=/opt/vietelite-mcp/main --transport=sse --port=8080
-   Restart=always
-   RestartSec=5
-   EnvironmentFile=/opt/vietelite-mcp/.env
+```sh
+sudo mkdir -p /opt/vietelite-mcp/logs
+sudo cp main /opt/vietelite-mcp/            # from build directory or /tmp/
+sudo cp .env.example /opt/vietelite-mcp/.env
+sudo chown -R www-data:www-data /opt/vietelite-mcp
+sudo chmod 600 /opt/vietelite-mcp/.env
+```
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+Write permissions on `logs/` are required — the server writes to `logs/mcp.log` (relative to `WorkingDirectory`).
 
-3. **Enable and start service:**
+#### 3. Configure `/opt/vietelite-mcp/.env`
 
-   ```sh
-   sudo systemctl daemon-reload
-   sudo systemctl enable vietelite-mcp
-   sudo systemctl start vietelite-mcp
-   sudo systemctl status vietelite-mcp
-   ```
+```sh
+sudo nano /opt/vietelite-mcp/.env
+```
 
-4. **Connect Remote Client (Hermes / Claude / Cursor on VPS A):**
+```ini
+MYSQL_HOST=s5.pvmedia.vn
+MYSQL_PORT=3306
+MYSQL_USER=agent_mcp
+MYSQL_PASSWORD=<your_mysql_password>
+MYSQL_IDENTITY_DB=identity_service
+MYSQL_CLASS_DB=class_service
+MYSQL_FINANCE_DB=finance_service
+MYSQL_CRM_DB=crm_service
+MCP_AUTH_TOKEN=<generate_with_openssl_rand_-hex_24>
+MCP_HOST=0.0.0.0              # Use 127.0.0.1 if behind nginx/Caddy
+MCP_PORT=8080
+```
 
-   Add the server URL to your client config (e.g., `mcp_config.json`):
+- **Never commit `.env` to git** — it is already in `.gitignore`.
+- Generate a secure token: `openssl rand -hex 24`
+- If `MYSQL_HOST` is a remote server, ensure that server's firewall and MySQL user grants allow connections from this VPS IP.
 
-   ```json
-   {
-     "mcpServers": {
-       "vietelite-db": {
-         "url": "http://<VPS_B_IP>:8080/sse",
-         "headers": {
-           "Authorization": "Bearer <MCP_AUTH_TOKEN>"
-         }
-       }
-     }
-   }
-   ```
+#### 4. Create systemd service
+
+```sh
+sudo nano /etc/systemd/system/vietelite-mcp.service
+```
+
+```ini
+[Unit]
+Description=VietElite Go MCP Server (SSE)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/vietelite-mcp
+EnvironmentFile=/opt/vietelite-mcp/.env
+ExecStart=/opt/vietelite-mcp/main --transport=sse
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Host and port are read from `.env` (`MCP_HOST`, `MCP_PORT`), so no need to pass flags.
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now vietelite-mcp
+sudo systemctl status vietelite-mcp
+```
+
+View logs:
+```sh
+journalctl -u vietelite-mcp -f
+# or
+tail -f /opt/vietelite-mcp/logs/mcp.log
+```
+
+#### 5. Verify the server
+
+```sh
+# Without token, should return 401 Unauthorized
+curl -i http://127.0.0.1:8080/sse
+
+# With valid token, should see SSE stream "event: endpoint"
+curl -N -H "Authorization: Bearer <your_token>" http://127.0.0.1:8080/sse
+```
+
+#### 6. Open access for MCPHub
+
+**Same VPS or SSH tunnel:** Set `MCP_HOST=127.0.0.1` in `.env`, MCPHub points to `http://127.0.0.1:8080/sse`.
+
+**MCPHub on a different server:** Allow only MCPHub's IP:
+```sh
+sudo ufw allow from <MCPHUB_IP> to any port 8080 proto tcp
+```
+
+**Behind reverse proxy with HTTPS** (e.g., `https://mcp-db.vietelite.link`):
+
+Set `MCP_HOST=127.0.0.1` in `.env`, then configure Caddy:
+```
+mcp-db.vietelite.link {
+    reverse_proxy 127.0.0.1:8080 {
+        flush_interval -1
+    }
+}
+```
+
+For nginx, add `proxy_buffering off;` to preserve SSE streaming.
+
+#### 7. Update to a new version
+
+```sh
+cd ~/vietelite_mcp
+git pull
+cd go-server
+go build -o main .
+sudo systemctl stop vietelite-mcp
+sudo cp main /opt/vietelite-mcp/
+sudo systemctl start vietelite-mcp
+```
+
+---
+
+### MCPHub / Remote Client Configuration
+
+Add the server to your MCP client config (MCPHub, Hermes, Claude Desktop, Cursor):
+
+```json
+{
+  "mcpServers": {
+    "vietelite-db": {
+      "url": "http://<VPS_IP>:8080/sse",
+      "headers": {
+        "Authorization": "Bearer <MCP_AUTH_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+If using a domain behind reverse proxy:
+```json
+{
+  "mcpServers": {
+    "vietelite-db": {
+      "url": "https://mcp-db.vietelite.link/sse",
+      "headers": {
+        "Authorization": "Bearer <MCP_AUTH_TOKEN>"
+      }
+    }
+  }
+}
+```
 
 ---
 
 ### Option B: SSH Stdio Tunnel (Zero Network Exposure)
 
-If you do not wish to expose HTTP ports to the Internet, connect from **VPS A** (Hermes) to **VPS B** via SSH tunnel over Stdio transport:
-
-Config on **VPS A**:
+Connect from a remote client to the MCP server via SSH without exposing HTTP ports:
 
 ```json
 {
@@ -200,7 +315,7 @@ Config on **VPS A**:
       "command": "ssh",
       "args": [
         "-i", "/path/to/id_rsa",
-        "user@<VPS_B_IP>",
+        "user@<VPS_IP>",
         "/opt/vietelite-mcp/main"
       ]
     }
@@ -208,13 +323,17 @@ Config on **VPS A**:
 }
 ```
 
+No auth token is needed for stdio transport — SSH provides authentication and encryption.
+
 ---
 
 ### Option C: Local IDE Integration (Zed / Claude Desktop / Cursor)
 
+For local development, run the server in stdio mode (no HTTP, no auth needed):
+
 #### Zed
 
-Add an entry in `~/.config/zed/settings.json`:
+`~/.config/zed/settings.json`:
 
 ```json
 {
@@ -231,7 +350,7 @@ Add an entry in `~/.config/zed/settings.json`:
 
 #### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+`claude_desktop_config.json`:
 
 ```json
 {
@@ -243,6 +362,13 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+---
+
+## Known Limitations
+
+- **Tool annotations:** All tools currently report `readOnlyHint: false, destructiveHint: true`. This is semantically incorrect — the tools only read data. MCP clients may prompt unnecessarily before calling. A future update will add `WithReadOnlyHintAnnotation(true)` when registering tools.
+- **Reverse proxy base URL:** When deployed behind a reverse proxy with a custom domain, the `/message` endpoint URL returned by SSE may use the wrong host. If you encounter this, file an issue or add `MCP_BASE_URL` support.
 
 ---
 
