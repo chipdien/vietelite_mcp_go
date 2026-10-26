@@ -4,10 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 
 	"vietelite-mcp/go-server/config"
 	"vietelite-mcp/go-server/db"
 	"vietelite-mcp/go-server/logger"
+	"vietelite-mcp/go-server/middleware"
 	"vietelite-mcp/go-server/tools"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -42,10 +44,23 @@ func main() {
 
 	if *transport == "sse" {
 		sseServer := server.NewSSEServer(s)
+
+		authHandler := middleware.AuthMiddleware(cfg.AuthToken)(sseServer)
+
+		mux := http.NewServeMux()
+		mux.Handle("/sse", authHandler)
+		mux.Handle("/message", authHandler)
+
 		addr := fmt.Sprintf(":%d", *port)
-		logger.Info("SERVER_READY", "MCP SSE Server listening on http://0.0.0.0:%d/sse...", *port)
-		log.Printf("MCP SSE Server listening on http://0.0.0.0:%d/sse", *port)
-		if err := sseServer.Start(addr); err != nil {
+		if cfg.AuthToken != "" {
+			logger.Info("SERVER_READY", "MCP SSE Server with auth protection listening on http://0.0.0.0:%d/sse...", *port)
+			log.Printf("MCP SSE Server with auth protection listening on http://0.0.0.0:%d/sse", *port)
+		} else {
+			logger.Info("SERVER_READY", "MCP SSE Server listening on http://0.0.0.0:%d/sse...", *port)
+			log.Printf("MCP SSE Server listening on http://0.0.0.0:%d/sse", *port)
+		}
+
+		if err := http.ListenAndServe(addr, mux); err != nil {
 			logger.Error("SERVER_ERROR", "SSE Server error: %v", err)
 			log.Fatalf("SSE Server error: %v", err)
 		}

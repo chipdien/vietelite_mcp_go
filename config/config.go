@@ -17,6 +17,7 @@ type DBConfig struct {
 	ClassDB    string
 	FinanceDB  string
 	CRMDB      string
+	AuthToken  string
 }
 
 func LoadConfig() DBConfig {
@@ -32,6 +33,7 @@ func LoadConfig() DBConfig {
 		ClassDB:    getEnv("MYSQL_CLASS_DB", "class_service"),
 		FinanceDB:  getEnv("MYSQL_FINANCE_DB", "finance_service"),
 		CRMDB:      getEnv("MYSQL_CRM_DB", "crm_service"),
+		AuthToken:  getEnv("MCP_AUTH_TOKEN", ""),
 	}
 }
 

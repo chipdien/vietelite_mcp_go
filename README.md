@@ -69,11 +69,25 @@ LLM can never accidentally mutate data or exhaust its context window.
    MYSQL_CLASS_DB=class_service
    MYSQL_FINANCE_DB=finance_service
    MYSQL_CRM_DB=crm_service
+   MCP_AUTH_TOKEN=your-secret-token-here
    ```
 
    `.env` is git-ignored — never commit real credentials.
 
    > **Note:** Environment variables exported in the shell take precedence over `.env`.
+
+### Authentication (SSE mode)
+
+When `MCP_AUTH_TOKEN` is set, the HTTP transport requires a **Bearer token** on every request
+(`/sse` and `/message`):
+
+```sh
+curl -H "Authorization: Bearer $MCP_AUTH_TOKEN" http://<HOST>:8080/sse
+```
+
+Requests with a missing or invalid token are rejected with `401 Unauthorized` and logged
+under the `AUTH` event. If `MCP_AUTH_TOKEN` is left empty, the server runs **unauthenticated**
+(only acceptable behind an SSH tunnel or a local-only bind address).
 
 ## Build
 
@@ -161,7 +175,10 @@ To run the MCP server as a background service on **VPS B**:
    {
      "mcpServers": {
        "vietelite-db": {
-         "url": "http://<VPS_B_IP>:8080/sse"
+         "url": "http://<VPS_B_IP>:8080/sse",
+         "headers": {
+           "Authorization": "Bearer <MCP_AUTH_TOKEN>"
+         }
        }
      }
    }
