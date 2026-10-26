@@ -113,7 +113,7 @@ The server supports two transport modes:
 ### Command-line Flags:
 
 - `--transport`: `stdio` (default) or `sse`.
-- `--port`: HTTP port for SSE mode (default `8080`).
+- `--port`: HTTP port for SSE mode. Defaults to env `MCP_PORT`, then `8080`. The flag overrides the env var.
 
 ```sh
 # Run locally using Stdio (default)

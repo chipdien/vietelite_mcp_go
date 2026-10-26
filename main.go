@@ -17,7 +17,7 @@ import (
 
 func main() {
 	transport := flag.String("transport", "stdio", "Transport mode: stdio or sse")
-	port := flag.Int("port", 8080, "HTTP port for SSE transport")
+	port := flag.Int("port", 0, "HTTP port for SSE transport (default: $MCP_PORT or 8080)")
 	flag.Parse()
 
 	if err := logger.InitLogger("logs/mcp.log"); err != nil {
@@ -26,6 +26,9 @@ func main() {
 	logger.Info("SERVER_START", "Initializing VietElite DB MCP Server...")
 
 	cfg := config.LoadConfig()
+	if *port == 0 {
+		*port = cfg.ServerPort
+	}
 
 	if err := db.InitPools(cfg); err != nil {
 		logger.Error("DB_INIT", "Failed to initialize database pools: %v", err)

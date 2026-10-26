@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,7 @@ type DBConfig struct {
 	FinanceDB  string
 	CRMDB      string
 	AuthToken  string
+	ServerPort int
 }
 
 func LoadConfig() DBConfig {
@@ -34,12 +36,23 @@ func LoadConfig() DBConfig {
 		FinanceDB:  getEnv("MYSQL_FINANCE_DB", "finance_service"),
 		CRMDB:      getEnv("MYSQL_CRM_DB", "crm_service"),
 		AuthToken:  getEnv("MCP_AUTH_TOKEN", ""),
+		ServerPort: getEnvInt("MCP_PORT", 8080),
 	}
 }
 
 func getEnv(key string, defaultVal string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if v, ok := os.LookupEnv(key); ok {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 65536 {
+			return n
+		}
+		log.Printf("Notice: invalid %s=%q, using %d", key, v, defaultVal)
 	}
 	return defaultVal
 }
