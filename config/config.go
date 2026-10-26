@@ -20,6 +20,7 @@ type DBConfig struct {
 	CRMDB      string
 	AuthToken  string
 	ServerPort int
+	ServerHost string
 }
 
 func LoadConfig() DBConfig {
@@ -37,6 +38,7 @@ func LoadConfig() DBConfig {
 		CRMDB:      getEnv("MYSQL_CRM_DB", "crm_service"),
 		AuthToken:  getEnv("MCP_AUTH_TOKEN", ""),
 		ServerPort: getEnvInt("MCP_PORT", 8080),
+		ServerHost: getEnv("MCP_HOST", "0.0.0.0"),
 	}
 }
 

@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strconv"
 
 	"vietelite-mcp/go-server/config"
 	"vietelite-mcp/go-server/db"
@@ -17,6 +18,7 @@ import (
 
 func main() {
 	transport := flag.String("transport", "stdio", "Transport mode: stdio or sse")
+	host := flag.String("host", "", "Bind address for SSE transport (default: $MCP_HOST or 0.0.0.0)")
 	port := flag.Int("port", 0, "HTTP port for SSE transport (default: $MCP_PORT or 8080)")
 	flag.Parse()
 
@@ -26,6 +28,9 @@ func main() {
 	logger.Info("SERVER_START", "Initializing VietElite DB MCP Server...")
 
 	cfg := config.LoadConfig()
+	if *host == "" {
+		*host = cfg.ServerHost
+	}
 	if *port == 0 {
 		*port = cfg.ServerPort
 	}
@@ -54,13 +59,13 @@ func main() {
 		mux.Handle("/sse", authHandler)
 		mux.Handle("/message", authHandler)
 
-		addr := fmt.Sprintf(":%d", *port)
+		addr := net.JoinHostPort(*host, strconv.Itoa(*port))
 		if cfg.AuthToken != "" {
-			logger.Info("SERVER_READY", "MCP SSE Server with auth protection listening on http://0.0.0.0:%d/sse...", *port)
-			log.Printf("MCP SSE Server with auth protection listening on http://0.0.0.0:%d/sse", *port)
+			logger.Info("SERVER_READY", "MCP SSE Server with auth protection listening on http://%s/sse...", addr)
+			log.Printf("MCP SSE Server with auth protection listening on http://%s/sse", addr)
 		} else {
-			logger.Info("SERVER_READY", "MCP SSE Server listening on http://0.0.0.0:%d/sse...", *port)
-			log.Printf("MCP SSE Server listening on http://0.0.0.0:%d/sse", *port)
+			logger.Info("SERVER_READY", "MCP SSE Server listening on http://%s/sse...", addr)
+			log.Printf("MCP SSE Server listening on http://%s/sse", addr)
 		}
 
 		if err := http.ListenAndServe(addr, mux); err != nil {

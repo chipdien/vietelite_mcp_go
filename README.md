@@ -113,6 +113,7 @@ The server supports two transport modes:
 ### Command-line Flags:
 
 - `--transport`: `stdio` (default) or `sse`.
+- `--host`: Bind address for SSE mode. Defaults to env `MCP_HOST`, then `0.0.0.0` (use `127.0.0.1` for local-only, e.g. behind a reverse proxy). The flag overrides the env var.
 - `--port`: HTTP port for SSE mode. Defaults to env `MCP_PORT`, then `8080`. The flag overrides the env var.
 
 ```sh
