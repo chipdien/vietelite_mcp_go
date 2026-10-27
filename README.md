@@ -94,13 +94,126 @@ under the `AUTH` event. If `MCP_AUTH_TOKEN` is left empty, the server runs **una
 From the server directory:
 
 ```sh
+# Development build (version reads "dev")
 go build -o main .
+
+# Release-style build with version metadata baked in
+go build -trimpath \
+  -ldflags "-s -w \
+    -X vietelite-mcp/go-server/version.Version=v1.2.3 \
+    -X vietelite-mcp/go-server/version.Commit=$(git rev-parse --short HEAD) \
+    -X vietelite-mcp/go-server/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o main .
 ```
 
 Run tests with:
 
 ```sh
+# Unit and integration tests
 go test ./... -v
+
+# Format and vet (the release workflow enforces both)
+gofmt -l . && go vet ./...
+```
+
+## Releases & Versioning
+
+Pushing a tag that starts with `v` builds and publishes release binaries
+automatically via `.github/workflows/release.yml`:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow runs tests first, then cross-compiles for six targets
+(`linux`/`darwin`/`windows` × `amd64`/`arm64`), publishes a `checksums.txt`,
+and attaches everything to a GitHub Release. Version and commit metadata are
+injected with `-ldflags`, so `./main --version` reports exactly what was built.
+
+Asset naming is stable and is what the updater looks for:
+
+```
+vietelite-mcp_<tag>_<goos>_<goarch>[.exe]
+vietelite-mcp_v1.0.0_linux_amd64
+vietelite-mcp_v1.0.0_darwin_arm64
+vietelite-mcp_v1.0.0_windows_amd64.exe
+```
+
+Tags containing a hyphen (e.g. `v1.1.0-rc.1`) are published as prereleases.
+You can also re-run the workflow manually from the Actions tab with an existing
+tag.
+
+### Release notes
+
+When `go-server/CHANGELOG.md` exists, the workflow extracts the section whose
+heading matches the tag and uses it as the release body. Otherwise it falls back
+to a one-line description. Keep entries under a `## <tag>` heading:
+
+```markdown
+## v1.1.0
+
+- Add `--auto-update` support.
+- Fix SSE host binding.
+```
+
+## Updating the Server
+
+The binary can update itself from GitHub Releases. Every download is verified
+against the published `checksums.txt` before it replaces anything, and the swap
+is atomic (a temp file in the same directory is renamed over the executable).
+
+| Command | Behaviour |
+| --- | --- |
+| `./main --version` | Print version, commit, build date, and platform. |
+| `./main --check-update` | Query GitHub. Exit `0` = current, `2` = update available, `1` = error. |
+| `./main --update` | Download, verify, and install the newest release. |
+| `MCP_AUTO_UPDATE=1 ./main` | Check and install on startup, before serving requests. |
+
+Examples:
+
+```sh
+# Manual check
+./main --check-update
+
+# Manual update (restart afterwards)
+./main --update
+sudo systemctl restart vietelite-mcp
+
+# Automatic update on start, then serve normally
+MCP_AUTO_UPDATE=1 ./main --transport=sse
+```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MCP_AUTO_UPDATE` | `0` | Set to `1`/`true` to check and install updates on startup. |
+| `MCP_UPDATE_REPO` | `chipdien/vietelite_mcp` | Override the GitHub repo for forks. |
+| `MCP_UPDATE_PRERELEASE` | `0` | Allow updating to prerelease tags. |
+| `MCP_GITHUB_TOKEN` | *(empty)* | Optional token; only needed to raise the anonymous API rate limit. |
+| `MCP_UPDATE_TARGET` | *(running exe)* | Replace this path instead of `os.Executable()`. Useful behind wrappers. |
+
+> **Stdio note:** update notices are written to `stderr` and the log file only —
+> never `stdout` — because `stdout` carries the MCP JSON-RPC protocol and any
+> stray output would corrupt the stream.
+
+### Self-update behaviour on each platform
+
+- **Linux / macOS:** the new binary is written to a temp file next to the
+executable and renamed over it. The running process keeps its old inode, so the
+current session is unaffected; restart to run the new build.
+- **Windows:** a running `.exe` cannot be replaced. The new binary is staged as
+`main.exe.new` and the command explains the manual swap.
+- **Permissions:** the directory containing the binary must be writable by the
+user running `--update` (e.g. `/opt/vietelite-mcp` for the systemd service).
+  If it is not, the update fails cleanly and leaves the existing binary intact.
+
+For a systemd deployment, run the update as the service user, then restart:
+
+```sh
+sudo -u www-data /opt/vietelite-mcp/main --update
+sudo systemctl restart vietelite-mcp
 ```
 
 ## Transport Modes & Command-Line Flags
@@ -115,6 +228,9 @@ The server supports two transport modes:
 - `--transport`: `stdio` (default) or `sse`.
 - `--host`: Bind address for SSE mode. Defaults to env `MCP_HOST`, then `0.0.0.0` (use `127.0.0.1` for local-only, e.g. behind a reverse proxy). The flag overrides the env var.
 - `--port`: HTTP port for SSE mode. Defaults to env `MCP_PORT`, then `8080`. The flag overrides the env var.
+- `--version`: Print version, commit, build date, and platform, then exit.
+- `--check-update`: Query GitHub for a newer release and exit (`0` current, `2` available, `1` error).
+- `--update`: Install the newest GitHub release and exit. Restart to apply.
 
 ```sh
 # Run locally using Stdio (default)
@@ -258,6 +374,20 @@ mcp-db.vietelite.link {
 For nginx, add `proxy_buffering off;` to preserve SSE streaming.
 
 #### 7. Update to a new version
+
+**Using the built-in updater** (no Go toolchain needed on the VPS):
+
+```sh
+sudo -u www-data /opt/vietelite-mcp/main --check-update   # is there a newer release?
+sudo -u www-data /opt/vietelite-mcp/main --update         # download, verify, install
+sudo systemctl restart vietelite-mcp
+```
+
+To have the server pull updates on its own, set `MCP_AUTO_UPDATE=1` in
+`/opt/vietelite-mcp/.env`. It checks before serving requests and logs the
+result under `AUTO_UPDATE`; restart is still required to run the new build.
+
+**Building from source** (when you need an unreleased commit):
 
 ```sh
 cd ~/vietelite_mcp

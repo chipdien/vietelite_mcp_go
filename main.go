@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 
 	"vietelite-mcp/go-server/config"
@@ -12,6 +13,7 @@ import (
 	"vietelite-mcp/go-server/logger"
 	"vietelite-mcp/go-server/middleware"
 	"vietelite-mcp/go-server/tools"
+	"vietelite-mcp/go-server/version"
 
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -20,12 +22,32 @@ func main() {
 	transport := flag.String("transport", "stdio", "Transport mode: stdio or sse")
 	host := flag.String("host", "", "Bind address for SSE transport (default: $MCP_HOST or 0.0.0.0)")
 	port := flag.Int("port", 0, "HTTP port for SSE transport (default: $MCP_PORT or 8080)")
+	showVersion := flag.Bool("version", false, "Print version information and exit")
+	checkUpdate := flag.Bool("check-update", false, "Check GitHub for a newer release and exit")
+	selfUpdate := flag.Bool("update", false, "Download and install the latest GitHub release, then exit")
 	flag.Parse()
+
+	if *showVersion {
+		// Version output goes to stdout for `./main --version | ...` pipelines;
+		// it runs before any MCP transport is started.
+		os.Stdout.WriteString(version.String() + "\n")
+		return
+	}
+	if *checkUpdate {
+		os.Exit(runUpdateCheck(os.Stdout))
+	}
+	if *selfUpdate {
+		os.Exit(runUpdate(os.Stdout))
+	}
 
 	if err := logger.InitLogger("logs/mcp.log"); err != nil {
 		log.Printf("Warning: failed to initialize log file: %v", err)
 	}
-	logger.Info("SERVER_START", "Initializing VietElite DB MCP Server...")
+	logger.Info("SERVER_START", "Initializing VietElite DB MCP Server (%s)...", version.Version)
+
+	// Opt-in self-update before serving requests. Must run after the logger is
+	// initialized so failures are recorded, and before stdio takes over stdout.
+	autoUpdate()
 
 	cfg := config.LoadConfig()
 	if *host == "" {
@@ -43,7 +65,7 @@ func main() {
 
 	s := server.NewMCPServer(
 		"VietElite DB MCP Server",
-		"1.0.0",
+		version.Version,
 		server.WithToolCapabilities(true),
 	)
 
