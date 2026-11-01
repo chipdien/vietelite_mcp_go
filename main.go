@@ -67,10 +67,20 @@ func main() {
 		"VietElite DB MCP Server",
 		version.Version,
 		server.WithToolCapabilities(true),
+		server.WithResourceCapabilities(false, true),
 	)
 
 	tools.RegisterGenericTools(s)
 	tools.RegisterBusinessTools(s)
+	tools.RegisterResources(s)
+
+	// Initialize capability gap store (non-fatal if fails)
+	if err := db.InitGapStore(); err != nil {
+		logger.Error("GAP_INIT", "Failed to initialize gap store: %v", err)
+		log.Printf("Warning: gap store initialization failed: %v", err)
+	} else {
+		logger.Info("GAP_INIT", "Capability gap tracking initialized")
+	}
 
 	if *transport == "sse" {
 		sseServer := server.NewSSEServer(s)

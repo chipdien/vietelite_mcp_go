@@ -440,6 +440,13 @@ func handleExecuteReadQuery(ctx context.Context, r mcp.CallToolRequest) (*mcp.Ca
 		Rows:     rowMaps,
 	}
 
+	// Record this ad-hoc query as a capability gap. A query reaching the raw
+	// execute_read_query path means no domain tool covered the caller's need;
+	// recording it surfaces patterns worth turning into first-class tools.
+	if gapErr := db.RecordGap("auto_query", service, "", query, "", ""); gapErr != nil {
+		logger.Error("GAP_RECORD", "failed to record capability gap: %v", gapErr)
+	}
+
 	logger.LogToolCall("execute_read_query", fmt.Sprintf("service=%s query=%q limit=%d rows=%d", service, finalSQL, limit, len(rowMaps)), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(result), nil
 }

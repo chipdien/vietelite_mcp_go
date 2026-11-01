@@ -44,6 +44,23 @@ LLM can never accidentally mutate data or exhaust its context window.
 | `get_class_academic_summary` | `class_id`, `student_id`?, `test_id`? | Aggregates test scores, homework completion, and teacher session comments for a class or student. |
 | `check_student_class_eligibility` | `student_id`, `class_id`? | Checks student enrollment status and overdue tuition balance before class entry. |
 
+## MCP Resources
+
+MCP Resources expose static files and frequently referenced master/catalog data with in-memory caching to eliminate repetitive DB queries and conserve LLM context tokens.
+
+| Scheme | URI | Source | Description |
+| --- | --- | --- | --- |
+| `schema://` | `schema://identity_service`<br>`schema://class_service`<br>`schema://finance_service`<br>`schema://crm_service` | `docs/db-schema/*.md` | Complete database schema documentation per service. |
+| `schema://` | `schema://summary` | `docs/db-schema/SUMMARY.md` | High-level 4-service relational map and entity relationships. |
+| `reference://` | `reference://centers` | `ve26_centers` (identity) | Master center list (ID, code, name, phone, address, admissions hotline). |
+| `reference://` | `reference://courses` | `edu_courses` (class) | Course catalog (ID, name, grade, level, domain_id). |
+| `reference://` | `reference://expense-categories` | `fin_expense_categories` (finance) | Active financial expense categories (ID, code, name, parent_id). |
+| `reference://` | `reference://pipeline-stages` | `crm_pipeline_stages` (crm) | CRM opportunity pipeline stages (ID, pipeline_id, name, code, order, SLA). |
+| `reference://` | `reference://accounts-chart` | `fin_accounts` (finance) | Chart of accounts for accounting queries. |
+| `guide://` | `guide://tools-by-role/{role}` | `docs/tools-by-role-*.md` | Role-based tool and workflow guides (`class-operations`, `teaching-assistant`, `teacher`, `center-manager`, `coo`, `accountant`, `ceo`). |
+| `gaps://` | `gaps://report` | SQLite Gap Store | Dynamic report of logged tool capability gaps to prioritize development. |
+| `server://` | `server://capabilities` | Runtime Metadata | Server version, transport modes, safety guards, and catalog index. |
+
 ## Prerequisites
 
 - **Go 1.22+** (see `go.mod`; the module builds with newer toolchains such as 1.26.x).
@@ -520,3 +537,35 @@ The server applies **defence in depth** so that no LLM tool call can modify data
 - **Automatic LIMIT capping.** `execute_read_query` rewrites or appends a trailing
   `LIMIT` (default 50, max 200) on `SELECT` queries only.
 - **Read-only via privileges.** Connection users should be granted **only `SELECT` and metadata privileges** on the target databases.
+
+
+## New Tools (Capability Gap Addressing)
+
+### Payment & Enrollment
+
+| Tool | Description |
+|------|-------------|
+| `get_student_payment_history` | Full payment history: invoices with allocated receipts (which receipt paid which invoice, when). |
+| `get_student_enrollment_history` | Class enrollment history: current classes + action log (joined/left/transferred). |
+| `get_class_debt_summary` | Tuition debt for a class: total billed/paid/outstanding + list of unpaid students. |
+
+### Gap Tracking
+
+| Tool | Description |
+|------|-------------|
+| `log_capability_gap` | Explicitly record when no suitable tool exists. Agent reports unmet needs. |
+| `summarize_capability_gaps` | Query recorded gaps by frequency to prioritize new tool development. |
+
+## Resources
+
+| URI | Description |
+|-----|-------------|
+| `schema://identity_service` | Identity service database schema (markdown) |
+| `schema://class_service` | Class service database schema (markdown) |
+| `schema://finance_service` | Finance service database schema (markdown) |
+| `schema://crm_service` | CRM service database schema (markdown) |
+| `schema://summary` | Summary of all 4 services |
+| `gaps://report` | Capability gaps report (markdown table, updated live) |
+| `guide://tools-by-role/{role}` | Tool recommendations by role (7 roles) |
+
+Gap tracking runs automatically: every `execute_read_query` call is logged to `data/gaps.db`.

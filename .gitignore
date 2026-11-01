@@ -1,3 +1,11 @@
 .env
 main
 logs/
+
+# SQLite capability gap database
+data/gaps.db
+data/gaps.db-shm
+data/gaps.db-wal
+
+# Log files
+logs/*.log
