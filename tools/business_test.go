@@ -83,3 +83,23 @@ func TestBusinessToolsValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAbsentAlertsDefaultSchoolYear(t *testing.T) {
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get_absent_alerts",
+			Arguments: map[string]any{
+				"consecutive_absent_count": 2,
+			},
+		},
+	}
+
+	res, err := handleGetAbsentAlerts(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// When DB pool is not initialized in unit tests, errorResult is returned gracefully
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+}

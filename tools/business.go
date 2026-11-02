@@ -3,11 +3,13 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"vietelite-mcp/go-server/config"
 	"vietelite-mcp/go-server/db"
 	"vietelite-mcp/go-server/logger"
 )
@@ -15,9 +17,10 @@ import (
 func RegisterBusinessTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("get_daily_class_schedule",
-			mcp.WithDescription("Retrieves daily class schedule, room assignment, teacher, and student headcount for a center."),
+			mcp.WithDescription("Retrieves daily class schedule, room assignment, teacher, and student headcount for a center. Defaults to current school year 2026-2027 if school_year_id is not specified."),
 			mcp.WithNumber("center_id", mcp.Required(), mcp.Description("Center ID")),
 			mcp.WithString("date", mcp.Description("Date YYYY-MM-DD")),
+			mcp.WithNumber("school_year_id", mcp.Description("School year ID (default: 2026 for school year 2026-2027)")),
 		),
 		handleGetDailyClassSchedule,
 	)
@@ -43,9 +46,11 @@ func RegisterBusinessTools(s *server.MCPServer) {
 
 	s.AddTool(
 		mcp.NewTool("get_absent_alerts",
-			mcp.WithDescription("Identifies students with consecutive absences for parent outreach."),
+			mcp.WithDescription("Identifies students with consecutive absences for parent outreach. Defaults to current school year 2026-2027 if school_year_id is not specified."),
 			mcp.WithNumber("center_id", mcp.Description("Optional Center ID filter")),
+			mcp.WithNumber("school_year_id", mcp.Description("Optional school year ID filter (default: 2026 for school year 2026-2027; set to 0 for all years)")),
 			mcp.WithNumber("consecutive_absent_count", mcp.Description("Consecutive absences threshold (default 2)")),
+			mcp.WithNumber("limit", mcp.Description("Max alerts returned (default 50, max 200)")),
 		),
 		handleGetAbsentAlerts,
 	)
@@ -83,9 +88,9 @@ func RegisterBusinessTools(s *server.MCPServer) {
 
 	s.AddTool(
 		mcp.NewTool("get_student_enrollment_history",
-			mcp.WithDescription("Retrieves student's class enrollment history: current classes (optionally filtered by school year) and historical enrollment actions (joined, left, transferred)."),
+			mcp.WithDescription("Retrieves student's class enrollment history: current classes (optionally filtered by school year) and historical enrollment actions (joined, left, transferred). Defaults to current school year 2026-2027 if not specified."),
 			mcp.WithNumber("student_id", mcp.Required(), mcp.Description("Student ID")),
-			mcp.WithNumber("school_year_id", mcp.Description("Filter current enrollments by school year ID")),
+			mcp.WithNumber("school_year_id", mcp.Description("Filter current enrollments by school year ID (default: 2026 for school year 2026-2027)")),
 			mcp.WithBoolean("active_only", mcp.Description("Show only active enrollments (default false)")),
 			mcp.WithNumber("limit", mcp.Description("Max history records returned (default 50)")),
 		),
@@ -144,6 +149,7 @@ func handleGetDailyClassSchedule(ctx context.Context, r mcp.CallToolRequest) (*m
 	}
 
 	dateStr := r.GetString("date", time.Now().Format("2006-01-02"))
+	schoolYearID := r.GetInt("school_year_id", config.DefaultSchoolYearID)
 
 	pool, err := db.GetPool("class")
 	if err != nil {
@@ -155,8 +161,8 @@ func handleGetDailyClassSchedule(ctx context.Context, r mcp.CallToolRequest) (*m
 	rows, err := pool.QueryContext(ctx, `
 		SELECT c.id, c.name, COALESCE(c.friendly_class_schedule, ''), COALESCE(c.friendly_class_teacher, '')
 		FROM edu_classes c
-		WHERE c.center_id = ? AND c.deleted_at IS NULL
-		ORDER BY c.id DESC LIMIT 50`, centerID)
+		WHERE c.center_id = ? AND c.deleted_at IS NULL AND c.year_id = ?
+		ORDER BY c.id DESC LIMIT 50`, centerID, schoolYearID)
 	if err != nil {
 		res := errorResult(err)
 		logger.LogToolCall("get_daily_class_schedule", fmt.Sprintf("center=%d date=%s", centerID, dateStr), time.Since(start), err)
@@ -268,6 +274,9 @@ func handleGetStudentAttendanceHistory(ctx context.Context, r mcp.CallToolReques
 func handleGetAbsentAlerts(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	start := time.Now()
 	threshold := r.GetInt("consecutive_absent_count", 2)
+	centerID := r.GetInt("center_id", 0)
+	schoolYearID := r.GetInt("school_year_id", config.DefaultSchoolYearID)
+	limit := clampLimit(r.GetInt("limit", defaultLimit))
 
 	pool, err := db.GetPool("class")
 	if err != nil {
@@ -276,16 +285,43 @@ func handleGetAbsentAlerts(ctx context.Context, r mcp.CallToolRequest) (*mcp.Cal
 		return res, nil
 	}
 
-	rows, err := pool.QueryContext(ctx, `
-		SELECT sa.student_id, COUNT(*) AS absent_count
+	whereConditions := []string{
+		"sa.attendance IN ('absence', 'n_absence', 'absent', 'vắng', 'vang')",
+		"c.deleted_at IS NULL",
+		"s.is_deleted = 0",
+	}
+	var params []any
+
+	if schoolYearID > 0 {
+		whereConditions = append(whereConditions, "c.year_id = ?")
+		params = append(params, schoolYearID)
+	}
+
+	if centerID > 0 {
+		whereConditions = append(whereConditions, "c.center_id = ?")
+		params = append(params, centerID)
+	}
+
+	params = append(params, threshold, limit)
+
+	query := fmt.Sprintf(`
+		SELECT
+			sa.student_id,
+			COUNT(*) AS absent_count,
+			GROUP_CONCAT(DISTINCT c.name SEPARATOR ', ') AS class_names
 		FROM edu_student_session_attendance sa
-		WHERE sa.attendance IN ('absent', 'vắng', 'vang')
+		JOIN edu_sessions s ON sa.session_id = s.id
+		JOIN edu_classes c ON s.class_id = c.id
+		WHERE %s
 		GROUP BY sa.student_id
 		HAVING absent_count >= ?
-		LIMIT 50`, threshold)
+		ORDER BY absent_count DESC
+		LIMIT ?`, strings.Join(whereConditions, " AND "))
+
+	rows, err := pool.QueryContext(ctx, query, params...)
 	if err != nil {
 		res := errorResult(err)
-		logger.LogToolCall("get_absent_alerts", fmt.Sprintf("threshold=%d", threshold), time.Since(start), err)
+		logger.LogToolCall("get_absent_alerts", fmt.Sprintf("threshold=%d year=%d center=%d", threshold, schoolYearID, centerID), time.Since(start), err)
 		return res, nil
 	}
 	defer rows.Close()
@@ -297,10 +333,37 @@ func handleGetAbsentAlerts(ctx context.Context, r mcp.CallToolRequest) (*mcp.Cal
 		return res, nil
 	}
 
-	logger.LogToolCall("get_absent_alerts", fmt.Sprintf("threshold=%d count=%d", threshold, len(rowMaps)), time.Since(start), nil)
+	// Enrich with student and parent profiles from identity DB
+	studentIDs := make([]int, 0, len(rowMaps))
+	for _, row := range rowMaps {
+		if sid, ok := row["student_id"].(int64); ok {
+			studentIDs = append(studentIDs, int(sid))
+		} else if sid, ok := row["student_id"].(int); ok {
+			studentIDs = append(studentIDs, sid)
+		}
+	}
+	profiles := fetchStudentProfiles(ctx, studentIDs)
+	for _, row := range rowMaps {
+		var sid int
+		if idVal, ok := row["student_id"].(int64); ok {
+			sid = int(idVal)
+		} else if idVal, ok := row["student_id"].(int); ok {
+			sid = idVal
+		}
+		if p, found := profiles[sid]; found {
+			row["student_name"] = p["name"]
+			row["school"] = p["school"]
+			row["parent_name"] = p["parent_name"]
+			row["parent_phone"] = p["parent_phone"]
+		}
+	}
+
+	logger.LogToolCall("get_absent_alerts", fmt.Sprintf("threshold=%d year=%d count=%d", threshold, schoolYearID, len(rowMaps)), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"threshold": threshold,
-		"alerts":    rowMaps,
+		"threshold":    threshold,
+		"schoolYearId": schoolYearID,
+		"centerId":     centerID,
+		"alerts":       rowMaps,
 	}), nil
 }
 
@@ -481,7 +544,8 @@ func handleGetStudentEnrollmentHistory(ctx context.Context, r mcp.CallToolReques
 		return res, nil
 	}
 
-	schoolYearID := r.GetInt("school_year_id", 0)
+	// Default to current school year (2026-2027) if not specified
+	schoolYearID := r.GetInt("school_year_id", config.DefaultSchoolYearID)
 	activeOnly := r.GetBool("active_only", false)
 	limit := clampLimit(r.GetInt("limit", defaultLimit))
 
@@ -493,12 +557,8 @@ func handleGetStudentEnrollmentHistory(ctx context.Context, r mcp.CallToolReques
 	}
 
 	// Query 1: Current enrollments
-	currentWhereClause := "WHERE sc.student_id = ?"
-	currentParams := []any{studentID}
-	if schoolYearID > 0 {
-		currentWhereClause += " AND c.year_id = ?"
-		currentParams = append(currentParams, schoolYearID)
-	}
+	currentWhereClause := "WHERE sc.student_id = ? AND c.year_id = ?"
+	currentParams := []any{studentID, schoolYearID}
 	if activeOnly {
 		currentWhereClause += " AND (sc.leave_date IS NULL OR sc.leave_date >= CURDATE())"
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"vietelite-mcp/go-server/config"
 	"vietelite-mcp/go-server/db"
 	"vietelite-mcp/go-server/logger"
 )
@@ -86,22 +87,22 @@ func computeCenterMetrics(ctx context.Context, centerID int, from, to string) (*
 		Phone:      phone,
 	}
 
-	// 2. Class DB: active classes, active students, sessions
+	// 2. Class DB: active classes, active students, sessions (scoped to current school year)
 	classPool, err := db.GetPool("class")
 	if err == nil {
-		// Active classes
+		// Active classes — scoped to current school year
 		_ = classPool.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM edu_classes 
-			WHERE center_id = ? AND active = 1 AND deleted_at IS NULL
-		`, centerID).Scan(&metrics.ActiveClasses)
+			SELECT COUNT(*) FROM edu_classes
+			WHERE center_id = ? AND active = 1 AND deleted_at IS NULL AND year_id = ?
+		`, centerID, config.DefaultSchoolYearID).Scan(&metrics.ActiveClasses)
 
-		// Active students
+		// Active students — scoped to current school year
 		_ = classPool.QueryRowContext(ctx, `
-			SELECT COUNT(DISTINCT sc.student_id) 
+			SELECT COUNT(DISTINCT sc.student_id)
 			FROM edu_student_class sc
 			JOIN edu_classes c ON sc.class_id = c.id
-			WHERE c.center_id = ? AND (sc.status = 'active' OR sc.status IS NULL) AND sc.leave_date IS NULL AND c.deleted_at IS NULL
-		`, centerID).Scan(&metrics.ActiveStudents)
+			WHERE c.center_id = ? AND (sc.status = 'active' OR sc.status IS NULL) AND sc.leave_date IS NULL AND c.deleted_at IS NULL AND c.year_id = ?
+		`, centerID, config.DefaultSchoolYearID).Scan(&metrics.ActiveStudents)
 
 		// Sessions
 		sessionWhere := "center_id = ? AND is_deleted = 0"
@@ -135,7 +136,7 @@ func computeCenterMetrics(ctx context.Context, centerID int, from, to string) (*
 		}
 
 		_ = finPool.QueryRowContext(ctx, fmt.Sprintf(`
-			SELECT 
+			SELECT
 				COALESCE(SUM(d.amount), 0),
 				COALESCE(SUM(CASE WHEN i.paid_status != 'paid' THEN (d.amount - COALESCE(d.promotion_amount, 0)) ELSE 0 END), 0)
 			FROM fin_invoice_detail d
@@ -259,7 +260,7 @@ func handleGetNetworkOverview(ctx context.Context, r mcp.CallToolRequest) (*mcp.
 	classPool, _ := db.GetPool("class")
 	var totalActiveClasses, totalSessions int
 	if classPool != nil {
-		_ = classPool.QueryRowContext(ctx, `SELECT COUNT(*) FROM edu_classes WHERE active = 1 AND deleted_at IS NULL`).Scan(&totalActiveClasses)
+		_ = classPool.QueryRowContext(ctx, `SELECT COUNT(*) FROM edu_classes WHERE active = 1 AND deleted_at IS NULL AND year_id = ?`, config.DefaultSchoolYearID).Scan(&totalActiveClasses)
 
 		sWhere := "is_deleted = 0"
 		var sParams []any
@@ -289,7 +290,7 @@ func handleGetNetworkOverview(ctx context.Context, r mcp.CallToolRequest) (*mcp.
 		}
 
 		_ = finPool.QueryRowContext(ctx, fmt.Sprintf(`
-			SELECT 
+			SELECT
 				COALESCE(SUM(total_amount), 0),
 				COALESCE(SUM(CASE WHEN paid_status != 'paid' THEN (total_amount - paid_amount) ELSE 0 END), 0)
 			FROM fin_invoices
