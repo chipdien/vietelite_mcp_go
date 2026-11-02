@@ -123,6 +123,10 @@ func RegisterBusinessTools(s *server.MCPServer) {
 		),
 		handleSummarizeCapabilityGaps,
 	)
+
+	// Phase 1 tools
+	RegisterAcademicTools(s)
+	RegisterFinanceTools(s)
 }
 
 func handleGetDailyClassSchedule(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {

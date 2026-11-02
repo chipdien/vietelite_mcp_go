@@ -430,7 +430,9 @@ func formatServerCapabilities() string {
 
 	sb.WriteString("## Tool Groups\n\n")
 	sb.WriteString("- **Database Inspection Tools:** `list_databases`, `list_tables`, `describe_table`, `execute_read_query`\n")
-	sb.WriteString("- **Business Helpers:** `get_daily_class_schedule`, `get_class_roster`, `get_student_attendance_history`, `get_absent_alerts`, `get_class_academic_summary`, `check_student_class_eligibility`\n")
+	sb.WriteString("- **Business Helpers (Operations & Academic):** `get_daily_class_schedule`, `get_class_roster`, `get_class_detail`, `get_session_detail`, `get_student_attendance_history`, `get_absent_alerts`, `list_students_at_risk`, `list_ungraded_homework`, `get_homework_submissions`, `get_class_academic_summary`, `check_student_class_eligibility`\n")
+	sb.WriteString("- **Finance & Tuition Tools:** `get_invoice_detail`, `list_unpaid_invoices`, `find_unallocated_receipts`, `get_class_debt_summary`, `get_student_payment_history`\n")
+	sb.WriteString("- **Capability Gap Management:** `log_capability_gap`, `summarize_capability_gaps`\n")
 
 	return sb.String()
 }

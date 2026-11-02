@@ -33,16 +33,31 @@ LLM can never accidentally mutate data or exhaust its context window.
 | `search_classes` | `keyword`?, `center_id`?, `limit`? | Searches classes by name, code, course, or center. |
 | `get_finance_summary` | `student_id`?, `class_id`?, `limit`? | Fetches invoices, receipts, and wallet balances. |
 
-### Business Helper Tools (Class Management)
+### Business Helper Tools (Operations & Academic)
 
 | Tool | Parameters | Description |
 | --- | --- | --- |
 | `get_daily_class_schedule` | `center_id`, `date`? | Retrieves daily class schedule, room assignment, teacher, and student headcount for a center. |
 | `get_class_roster` | `class_id`, `session_date`? | Retrieves student roster and attendance status for a specific class session. |
+| `get_class_detail` | `class_id` | Retrieves comprehensive class info, schedule configs, room, teacher, course, fee, and active headcount. |
+| `get_session_detail` | `session_id` | Retrieves single session details: lesson materials/documents, attendance breakdown, and homework stats. |
 | `get_student_attendance_history` | `student_id`, `class_id`?, `limit`? | Retrieves attendance history, absence reasons, and make-up session records for a student. |
 | `get_absent_alerts` | `center_id`?, `consecutive_absent_count`? | Identifies students with consecutive absences for parent outreach. |
+| `list_students_at_risk` | `class_id`, `threshold_score`?, `min_absences`?, `limit`? | Flags students at academic/attendance risk based on absences, missing homework, and low scores. |
+| `list_ungraded_homework` | `class_id`, `from`?, `to`?, `limit`? | Lists homework submissions in a class that are awaiting grading or score entry. |
+| `get_homework_submissions` | `session_id` | Retrieves all student homework submissions, completion flags, scores, and comments for a session. |
 | `get_class_academic_summary` | `class_id`, `student_id`?, `test_id`? | Aggregates test scores, homework completion, and teacher session comments for a class or student. |
 | `check_student_class_eligibility` | `student_id`, `class_id`? | Checks student enrollment status and overdue tuition balance before class entry. |
+
+### Finance & Tuition Tools
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `get_invoice_detail` | `invoice_id` | Full breakdown of an invoice: line items, discounts, amounts, and allocated payment receipts. |
+| `list_unpaid_invoices` | `center_id`?, `from`?, `to`?, `min_days_overdue`?, `limit`? | Lists unpaid/partially paid tuition invoices with overdue days, debt labels, and student profiles. |
+| `find_unallocated_receipts` | `center_id`?, `from`?, `to`?, `limit`? | Finds receipts with unallocated balance ("tiền treo") not yet applied to invoices. |
+| `get_class_debt_summary` | `class_id`, `min_days_overdue`?, `limit`? | Debt summary for a class: total billed, paid, outstanding, and list of unpaid students. |
+| `get_student_payment_history` | `student_id`, `from`?, `to`?, `limit`? | Full payment history for a student with receipt allocation tracing. |
 
 ## MCP Resources
 
