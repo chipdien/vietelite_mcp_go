@@ -127,6 +127,11 @@ func RegisterBusinessTools(s *server.MCPServer) {
 	// Phase 1 tools
 	RegisterAcademicTools(s)
 	RegisterFinanceTools(s)
+
+	// Phase 2 tools
+	RegisterPayrollTools(s)
+	RegisterReconcileTools(s)
+	RegisterAggregateTools(s)
 }
 
 func handleGetDailyClassSchedule(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {

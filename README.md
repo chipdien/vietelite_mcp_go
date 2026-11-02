@@ -59,6 +59,30 @@ LLM can never accidentally mutate data or exhaust its context window.
 | `get_class_debt_summary` | `class_id`, `min_days_overdue`?, `limit`? | Debt summary for a class: total billed, paid, outstanding, and list of unpaid students. |
 | `get_student_payment_history` | `student_id`, `from`?, `to`?, `limit`? | Full payment history for a student with receipt allocation tracing. |
 
+### Teacher Payroll & Contracts
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `get_my_payroll` | `teacher_id`, `period`?, `limit`? | Payroll summary by period: sessions, hours, revenue, salary, and profit. |
+| `get_teacher_payroll_detail` | `teacher_payroll_id`, `limit`? | Itemized session breakdown: attendance, duration, base fee, revenue share, tax, net salary. |
+| `get_my_contract` | `teacher_id` | Contract terms: base salary, hourly rate, revenue share percentage, tax parameters. |
+| `reconcile_payroll_vs_contract` | `teacher_id`, `period`? | Cross-checks paid payroll amounts against contract compensation terms. |
+
+### Accounting & Bank Reconciliation
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `reconcile_invoice_vs_receipts` | `invoice_id`?, `student_id`?, `limit`? | Audits invoices against allocated receipts to detect overpayments or status mismatches. |
+| `reconcile_bank_vs_receipts` | `center_id`?, `from`?, `to`?, `limit`? | Reconciles bank credits vs system receipts to surface unmatched funds or unverified receipts. |
+
+### Center & Network Analytics
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `get_center_dashboard` | `center_id`, `from`?, `to`? | Consolidated 360° operational and financial performance KPIs for a learning center. |
+| `compare_centers_performance` | `from`?, `to`? | Performance benchmark across all centers on students, classes, revenue, and collection rate. |
+| `get_network_overview` | `from`?, `to`? | Macro network overview: total centers, classes, students, sessions, revenue, and collection rate. |
+
 ## MCP Resources
 
 MCP Resources expose static files and frequently referenced master/catalog data with in-memory caching to eliminate repetitive DB queries and conserve LLM context tokens.
