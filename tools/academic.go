@@ -263,9 +263,9 @@ func handleGetSessionDetail(ctx context.Context, r mcp.CallToolRequest) (*mcp.Ca
 
 	logger.LogToolCall("get_session_detail", fmt.Sprintf("session=%d docs=%d", sessionID, len(documents)), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"sessionId":   sessionID,
-		"sessionInfo": sessionInfo,
-		"documents":   documents,
+		"sessionId":       sessionID,
+		"sessionInfo":     sessionInfo,
+		"documents":       documents,
 		"attendanceStats": attStats,
 		"homeworkStats": map[string]int{
 			"totalRecords":    hwTotal,
@@ -646,8 +646,8 @@ func handleListUngradedHomework(ctx context.Context, r mcp.CallToolRequest) (*mc
 
 	logger.LogToolCall("list_ungraded_homework", fmt.Sprintf("class=%d pending=%d", classID, len(items)), time.Since(start), nil)
 	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"classId":            classID,
-		"pendingCount":       len(items),
+		"classId":             classID,
+		"pendingCount":        len(items),
 		"ungradedSubmissions": items,
 	}), nil
 }
