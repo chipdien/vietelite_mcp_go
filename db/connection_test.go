@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"vietelite-mcp/go-server/config"
+	"vietelite_mcp_go/config"
 )
 
 func resetGlobalPools(t *testing.T) {

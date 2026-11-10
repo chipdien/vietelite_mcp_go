@@ -156,9 +156,9 @@ go build -o main .
 # Release-style build with version metadata baked in
 go build -trimpath \
   -ldflags "-s -w \
-    -X vietelite-mcp/go-server/version.Version=v1.2.3 \
-    -X vietelite-mcp/go-server/version.Commit=$(git rev-parse --short HEAD) \
-    -X vietelite-mcp/go-server/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -X vietelite_mcp_go/version.Version=v1.2.3 \
+    -X vietelite_mcp_go/version.Commit=$(git rev-parse --short HEAD) \
+    -X vietelite_mcp_go/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o main .
 ```
 
@@ -202,7 +202,7 @@ tag.
 
 ### Release notes
 
-When `go-server/CHANGELOG.md` exists, the workflow extracts the section whose
+When `CHANGELOG.md` exists, the workflow extracts the section whose
 heading matches the tag and uses it as the release body. Otherwise it falls back
 to a one-line description. Keep entries under a `## <tag>` heading:
 
@@ -526,7 +526,7 @@ For local development, run the server in stdio mode (no HTTP, no auth needed):
   "context_servers": {
     "vietelite-go-mcp": {
       "command": {
-        "path": "/path/to/go-server/main",
+        "path": "/path/to/vietelite_mcp_go/main",
         "args": []
       }
     }
@@ -542,7 +542,7 @@ For local development, run the server in stdio mode (no HTTP, no auth needed):
 {
   "mcpServers": {
     "vietelite-go-mcp": {
-      "command": "/path/to/go-server/main",
+      "command": "/path/to/vietelite_mcp_go/main",
       "args": []
     }
   }

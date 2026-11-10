@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"vietelite-mcp/go-server/config"
+	"vietelite_mcp_go/config"
 )
 
 var (

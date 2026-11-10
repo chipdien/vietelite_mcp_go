@@ -9,8 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"vietelite-mcp/go-server/db"
-	"vietelite-mcp/go-server/logger"
+	"vietelite_mcp_go/db"
+	"vietelite_mcp_go/logger"
 )
 
 // RegisterReconcileTools registers accounting audit and reconciliation tools.

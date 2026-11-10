@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strings"
-	"vietelite-mcp/go-server/logger"
+	"vietelite_mcp_go/logger"
 )
 
 func AuthMiddleware(authToken string) func(http.Handler) http.Handler {

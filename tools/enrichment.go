@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"vietelite-mcp/go-server/db"
-	"vietelite-mcp/go-server/logger"
+	"vietelite_mcp_go/db"
+	"vietelite_mcp_go/logger"
 )
 
 // fetchStudentProfiles takes a slice of student IDs and fetches their basic profile from identity DB.

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"vietelite-mcp/go-server/logger"
-	"vietelite-mcp/go-server/updater"
-	"vietelite-mcp/go-server/version"
+	"vietelite_mcp_go/logger"
+	"vietelite_mcp_go/updater"
+	"vietelite_mcp_go/version"
 )
 
 // envBool parses a boolean env var, treating "1"/"true"/"yes"/"on" as true.

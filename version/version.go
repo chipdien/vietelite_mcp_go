@@ -2,7 +2,7 @@
 //
 // The values are injected at link time by the release workflow:
 //
-//	go build -ldflags "-X vietelite-mcp/go-server/version.Version=v1.2.3 ..."
+//	go build -ldflags "-X vietelite_mcp_go/version.Version=v1.2.3 ..."
 //
 // When built with a plain `go build` (local development), the values fall back
 // to the development defaults below.

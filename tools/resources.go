@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"vietelite-mcp/go-server/db"
-	"vietelite-mcp/go-server/logger"
-	"vietelite-mcp/go-server/version"
+	"vietelite_mcp_go/db"
+	"vietelite_mcp_go/logger"
+	"vietelite_mcp_go/version"
 )
 
 // referenceCache holds in-memory cached markdown representations of lookup tables.

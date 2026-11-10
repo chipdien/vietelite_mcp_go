@@ -1,4 +1,4 @@
-module vietelite-mcp/go-server
+module vietelite_mcp_go
 
 go 1.26.4
 

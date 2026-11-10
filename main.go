@@ -8,12 +8,12 @@ import (
 	"os"
 	"strconv"
 
-	"vietelite-mcp/go-server/config"
-	"vietelite-mcp/go-server/db"
-	"vietelite-mcp/go-server/logger"
-	"vietelite-mcp/go-server/middleware"
-	"vietelite-mcp/go-server/tools"
-	"vietelite-mcp/go-server/version"
+	"vietelite_mcp_go/config"
+	"vietelite_mcp_go/db"
+	"vietelite_mcp_go/logger"
+	"vietelite_mcp_go/middleware"
+	"vietelite_mcp_go/tools"
+	"vietelite_mcp_go/version"
 
 	"github.com/mark3labs/mcp-go/server"
 )
